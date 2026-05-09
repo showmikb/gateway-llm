@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sidebar-bg: #09090b;
+  --sidebar-border: #27272a;
+  --main-bg: #09090b;
+  --card-bg: #18181b;
+  --card-border: #27272a;
+  --muted: #a1a1aa;
+  --accent: #10b981;
+}
+
+body {
+  @apply antialiased text-zinc-100 bg-zinc-950;
+}
+
+@layer components {
+  .gatewayllm-card {
+    @apply rounded-xl border border-zinc-800 bg-zinc-900 shadow-md;
+  }
+  .gatewayllm-btn {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors;
+    @apply bg-emerald-600 text-white hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400;
+  }
+  .gatewayllm-btn-secondary {
+    @apply inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors;
+    @apply hover:border-zinc-600 hover:bg-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500;
+  }
+  .gatewayllm-btn-danger {
+    @apply inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors;
+    @apply bg-red-950/80 text-red-200 ring-1 ring-red-900/80 hover:bg-red-900/60;
+  }
+  .gatewayllm-input {
+    @apply w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500;
+    @apply focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500;
+  }
+  .gatewayllm-table-wrap {
+    @apply overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900;
+  }
+  .gatewayllm-table {
+    @apply min-w-full divide-y divide-zinc-800 text-left text-sm;
+  }
+  .gatewayllm-th {
+    @apply px-4 py-3 font-medium text-zinc-400;
+  }
+  .gatewayllm-td {
+    @apply px-4 py-3 text-zinc-200;
+  }
+}
+
+@keyframes orbFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-24px, 18px, 0) scale(1.08);
+  }
+}
+
+@keyframes orbFloatAlt {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(28px, -22px, 0) scale(1.12);
+  }
+}
+
+@keyframes orbFade {
+  0%, 100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes gridShift {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 48px 48px;
+  }
+}
+
+.gatewayllm-orb {
+  will-change: transform, opacity;
+  animation: orbFloat 14s ease-in-out infinite, orbFade 9s ease-in-out infinite;
+}
+
+.gatewayllm-orb-alt {
+  will-change: transform, opacity;
+  animation: orbFloatAlt 17s ease-in-out infinite, orbFade 11s ease-in-out infinite;
+}
+
+.gatewayllm-grid-drift {
+  animation: gridShift 22s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gatewayllm-orb,
+  .gatewayllm-orb-alt,
+  .gatewayllm-grid-drift {
+    animation: none;
+  }
+}
+
+@keyframes popupBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes popupCardIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes popupCircleDraw {
+  from { stroke-dashoffset: 166; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes popupCheckDraw {
+  from { stroke-dashoffset: 48; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes popupCrossDraw {
+  from { stroke-dashoffset: 36; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes popupSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes popupPulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+.gatewayllm-popup-backdrop {
+  animation: popupBackdropIn 180ms ease-out forwards;
+}
+
+.gatewayllm-popup-card {
+  animation: popupCardIn 260ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.gatewayllm-popup-circle {
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  animation: popupCircleDraw 520ms cubic-bezier(0.65, 0, 0.45, 1) 100ms forwards;
+}
+
+.gatewayllm-popup-check {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: popupCheckDraw 360ms cubic-bezier(0.65, 0, 0.45, 1) 560ms forwards;
+}
+
+.gatewayllm-popup-cross {
+  stroke-dasharray: 36;
+  stroke-dashoffset: 36;
+  animation: popupCrossDraw 280ms cubic-bezier(0.65, 0, 0.45, 1) 560ms forwards;
+}
+
+.gatewayllm-popup-spinner {
+  animation: popupSpin 900ms linear infinite;
+}
+
+.gatewayllm-popup-pulse {
+  animation: popupPulse 1.4s ease-in-out infinite;
+}

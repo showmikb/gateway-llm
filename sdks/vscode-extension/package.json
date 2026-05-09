@@ -1,0 +1,43 @@
+{
+  "name": "gateway-llm-vscode",
+  "displayName": "Gateway-LLM Inspector",
+  "description": "Live spend, recordings, and eval scores for Gateway-LLM, inline in VS Code and Cursor.",
+  "version": "0.1.0",
+  "publisher": "gateway-llm",
+  "engines": { "vscode": "^1.87.0" },
+  "categories": ["AI", "Debuggers", "Other"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "gatewayLLM.showLatestSpend",    "title": "Gateway-LLM: Show Latest Spend" },
+      { "command": "gatewayLLM.openRecording",      "title": "Gateway-LLM: Open Recording by Trace ID" },
+      { "command": "gatewayLLM.verifyReceipt",      "title": "Gateway-LLM: Verify Receipt" }
+    ],
+    "configuration": {
+      "title": "Gateway-LLM",
+      "properties": {
+        "gatewayLLM.baseURL": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "Base URL of your Gateway-LLM deployment."
+        },
+        "gatewayLLM.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Gateway-LLM API key (virtual key)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.87.0",
+    "typescript": "^5.4.0"
+  }
+}

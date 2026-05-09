@@ -1,0 +1,119 @@
+server:
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 120s
+  graceful_shutdown_timeout: 30s
+
+database:
+  url: ${DATABASE_URL}
+  max_connections: 25
+
+redis:
+  url: ${REDIS_URL}
+
+auth:
+  master_key: ${GATEWAY_LLM_MASTER_KEY}
+
+model_list:
+  - model_alias: "gpt-4o"
+    deployments:
+      - provider: openai
+        model: gpt-4o
+        api_key_env: OPENAI_API_KEY
+
+  - model_alias: "gpt-4o-mini"
+    deployments:
+      - provider: openai
+        model: gpt-4o-mini
+        api_key_env: OPENAI_API_KEY
+
+  - model_alias: "claude-sonnet"
+    deployments:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+        api_key_env: ANTHROPIC_API_KEY
+
+  - model_alias: "gemini-flash"
+    deployments:
+      - provider: gemini
+        model: gemini-2.0-flash
+        api_key_env: GEMINI_API_KEY
+
+  - model_alias: "smart"
+    deployments:
+      - provider: openai
+        model: gpt-4o
+        api_key_env: OPENAI_API_KEY
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+        api_key_env: ANTHROPIC_API_KEY
+      - provider: gemini
+        model: gemini-2.0-flash
+        api_key_env: GEMINI_API_KEY
+
+  - model_alias: "text-embedding-3-small"
+    deployments:
+      - provider: openai
+        model: text-embedding-3-small
+        api_key_env: OPENAI_API_KEY
+
+  - model_alias: "dall-e-3"
+    deployments:
+      - provider: openai
+        model: dall-e-3
+        api_key_env: OPENAI_API_KEY
+
+  - model_alias: "tts-1"
+    deployments:
+      - provider: openai
+        model: tts-1
+        api_key_env: OPENAI_API_KEY
+
+  - model_alias: "whisper-1"
+    deployments:
+      - provider: openai
+        model: whisper-1
+        api_key_env: OPENAI_API_KEY
+
+routing:
+  strategy: round-robin
+  retries: 2
+  retry_delay: 500ms
+  fallback_enabled: true
+
+rate_limiting:
+  default_rpm: 60
+  default_tpm: 100000
+  window: 1m
+
+logging:
+  level: info
+  format: json
+
+# Observability callbacks (uncomment to enable)
+# callbacks:
+#   - type: otel
+#     endpoint: "http://otel-collector:4318"
+#     service_name: gateway-llm
+#     headers:
+#       Authorization: "Bearer ${OTEL_TOKEN}"
+#
+#   - type: datadog
+#     api_key_env: DD_API_KEY
+#     site: datadoghq.com
+#
+#   - type: langsmith
+#     api_key_env: LANGSMITH_API_KEY
+#     project: "gateway-llm-prod"
+#
+#   - type: arize
+#     api_key_env: ARIZE_API_KEY
+#     space_key_env: ARIZE_SPACE_KEY
+#     model_id: gateway-llm
+#
+#   - type: webhook
+#     endpoint: "https://my-mlflow.example.com/api/2.0/mlflow/gateway/log"
+#     method: POST
+#     headers:
+#       Authorization: "Bearer ${MLFLOW_TOKEN}"
+#     timeout: 5s

@@ -1,0 +1,35 @@
+# Performance regression thresholds, consumed by .github/workflows/perf.yml.
+#
+# Every benchmark below is run on every PR to main. If the "mean" metric
+# regresses by more than `max_regression_pct` compared to the last main run,
+# the PR is failed.
+#
+# Thresholds should be tight. Loosening one requires a PR titled
+# `perf: relax <benchmark> threshold — reason` so regressions are visible
+# in git history forever.
+
+benchmarks:
+  - name: BenchmarkResolve
+    pkg:  ./internal/router
+    p99_ns: 1000              # 1 µs
+    max_regression_pct: 10
+
+  - name: BenchmarkResolveLitellmPrefix
+    pkg:  ./internal/router
+    p99_ns: 5000              # 5 µs — fallback path
+    max_regression_pct: 10
+
+  - name: BenchmarkFromOpenAI
+    pkg:  ./internal/ir
+    p99_ns: 5000              # 5 µs
+    max_regression_pct: 10
+
+  - name: BenchmarkRoundTrip
+    pkg:  ./internal/ir
+    p99_ns: 10000             # 10 µs
+    max_regression_pct: 10
+
+  - name: BenchmarkMemoryPut
+    pkg:  ./internal/replay
+    p99_ns: 20000             # 20 µs — includes gzip
+    max_regression_pct: 10

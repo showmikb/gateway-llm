@@ -1,0 +1,1690 @@
+openapi: 3.0.3
+info:
+  title: Gateway-LLM API
+  description: |
+    Unified LLM gateway that routes requests to OpenAI, Anthropic, and Gemini through a single
+    OpenAI-compatible API. Provides API key management, team/org multi-tenancy, usage tracking,
+    cost analytics, and role-based access control.
+
+    ## Authentication
+
+    All authenticated endpoints require a Bearer token in the `Authorization` header:
+
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    Tokens can be:
+    - **Master key** — full admin access (set via `GATEWAY_LLM_MASTER_KEY`)
+    - **API key** — created via `/v1/management/keys`, scoped to team/user/models
+    - **Session token** — returned from `/v1/management/users/login`, expires in 24h
+
+    ## Role Hierarchy
+
+    `super_admin` > `org_admin` > `team_admin` > `member` > `viewer`
+  version: 0.1.0
+  contact:
+    name: Gateway-LLM
+    url: https://gateway-llm.com
+
+servers:
+  - url: https://api.gateway-llm.com
+    description: Production
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Health
+    description: Liveness and readiness probes
+  - name: Chat
+    description: OpenAI-compatible chat completions
+  - name: Completions
+    description: Legacy text completions
+  - name: Embeddings
+    description: Text embeddings
+  - name: Images
+    description: Image generation
+  - name: Audio
+    description: Speech synthesis and transcription
+  - name: Moderations
+    description: Content moderation
+  - name: Responses
+    description: OpenAI Responses API
+  - name: Models
+    description: List available model aliases
+  - name: Config
+    description: Runtime configuration
+  - name: API Keys
+    description: Create, list, update, and delete API keys
+  - name: Teams
+    description: Team management
+  - name: Organizations
+    description: Multi-tenant organization management
+  - name: Users
+    description: User accounts and authentication
+  - name: Credentials
+    description: Encrypted provider API key vault
+  - name: Deployments
+    description: Model deployment routing table
+  - name: Usage
+    description: Spend logs and daily usage analytics
+  - name: Pricing
+    description: Per-model cost configuration
+  - name: Callbacks
+    description: Webhook and observability callbacks
+  - name: Discovery
+    description: Auto-discover models from provider credentials
+  - name: OpenAI Passthrough
+    description: |
+      Any /v1/* request that does not match a typed Gateway-LLM handler is
+      forwarded to the upstream OpenAI-compatible provider resolved from the
+      request's model field (or the configured default_model_alias). This
+      covers files, assistants, threads, vector stores, batches, fine-tuning,
+      image edits/variations, audio translations, and future OpenAI endpoints.
+      Gateway-owned paths (/v1/management, /v1/metrics, /v1/receipts, etc.)
+      are never forwarded. Auth, rate-limiting, model access, and audit
+      middleware apply to passthrough requests identically to typed handlers.
+      Configure via the openai_compat section in gateway config.
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Master key, API key, or session token
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            type:
+              type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, ready]
+
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model:
+          type: string
+          description: Model alias configured in Gateway-LLM
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                enum: [system, user, assistant, function, tool]
+              content:
+                type: string
+        temperature:
+          type: number
+        max_tokens:
+          type: integer
+        stream:
+          type: boolean
+        top_p:
+          type: number
+        frequency_penalty:
+          type: number
+        presence_penalty:
+          type: number
+        stop:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+
+    ChatCompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+        created:
+          type: integer
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              message:
+                type: object
+                properties:
+                  role:
+                    type: string
+                  content:
+                    type: string
+              finish_reason:
+                type: string
+        usage:
+          $ref: '#/components/schemas/Usage'
+
+    Usage:
+      type: object
+      properties:
+        prompt_tokens:
+          type: integer
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+
+    CompletionRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model:
+          type: string
+        prompt:
+          type: string
+        max_tokens:
+          type: integer
+        temperature:
+          type: number
+        stream:
+          type: boolean
+
+    EmbeddingRequest:
+      type: object
+      required: [model, input]
+      properties:
+        model:
+          type: string
+        input:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+        encoding_format:
+          type: string
+
+    ImageGenerationRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model:
+          type: string
+        prompt:
+          type: string
+        n:
+          type: integer
+        size:
+          type: string
+
+    ModerationRequest:
+      type: object
+      required: [model, input]
+      properties:
+        model:
+          type: string
+        input:
+          type: string
+
+    ModelList:
+      type: object
+      properties:
+        object:
+          type: string
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              object:
+                type: string
+
+    APIKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        team_id:
+          type: string
+          format: uuid
+        models:
+          type: array
+          items:
+            type: string
+        rpm_limit:
+          type: integer
+        tpm_limit:
+          type: integer
+        max_budget:
+          type: number
+        is_active:
+          type: boolean
+        total_spend:
+          type: number
+
+    CreateAPIKeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        team_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        models:
+          type: array
+          items:
+            type: string
+        rpm_limit:
+          type: integer
+        tpm_limit:
+          type: integer
+        max_budget:
+          type: number
+
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        org_id:
+          type: string
+          format: uuid
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        max_budget:
+          type: number
+        is_active:
+          type: boolean
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, org_admin, team_admin, member, viewer]
+        is_active:
+          type: boolean
+
+    Credential:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        provider:
+          type: string
+          enum: [openai, anthropic, gemini]
+        api_key_masked:
+          type: string
+        api_base:
+          type: string
+        is_active:
+          type: boolean
+
+    Deployment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        model_alias:
+          type: string
+        provider:
+          type: string
+        provider_model:
+          type: string
+        api_base:
+          type: string
+        priority:
+          type: integer
+        is_active:
+          type: boolean
+
+    DataWrapper:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+
+    ResponsesRequest:
+      type: object
+      required: [model, input]
+      properties:
+        model:
+          type: string
+        input:
+          type: string
+
+paths:
+  /:
+    get:
+      summary: API information
+      description: Returns API name, version, and links to documentation
+      tags: [Health]
+      responses:
+        '200':
+          description: API info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  version:
+                    type: string
+                  docs:
+                    type: string
+
+  /health:
+    get:
+      summary: Liveness check
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/ready:
+    get:
+      summary: Readiness check
+      description: Verifies database connectivity
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/chat/completions:
+    post:
+      summary: Create chat completion
+      description: |
+        OpenAI-compatible chat completion endpoint. Gateway-LLM routes the request to the
+        appropriate provider based on the model alias. Supports streaming via `stream: true`.
+      tags: [Chat]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+      responses:
+        '200':
+          description: Completion response
+          headers:
+            X-Gateway-LLM-Cost:
+              schema:
+                type: string
+            X-Gateway-LLM-Tokens-Input:
+              schema:
+                type: string
+            X-Gateway-LLM-Tokens-Output:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCompletionResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/completions:
+    post:
+      summary: Create text completion
+      tags: [Completions]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompletionRequest'
+      responses:
+        '200':
+          description: Completion response
+        '401':
+          description: Unauthorized
+
+  /v1/embeddings:
+    post:
+      summary: Create embeddings
+      tags: [Embeddings]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbeddingRequest'
+      responses:
+        '200':
+          description: Embedding response
+        '401':
+          description: Unauthorized
+
+  /v1/images/generations:
+    post:
+      summary: Generate images
+      tags: [Images]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageGenerationRequest'
+      responses:
+        '200':
+          description: Image generation response
+        '401':
+          description: Unauthorized
+
+  /v1/audio/speech:
+    post:
+      summary: Create speech
+      description: Text-to-speech synthesis
+      tags: [Audio]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model, input, voice]
+              properties:
+                model:
+                  type: string
+                input:
+                  type: string
+                voice:
+                  type: string
+      responses:
+        '200':
+          description: Audio data
+        '401':
+          description: Unauthorized
+
+  /v1/audio/transcriptions:
+    post:
+      summary: Transcribe audio
+      description: Speech-to-text transcription
+      tags: [Audio]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                model:
+                  type: string
+      responses:
+        '200':
+          description: Transcription result
+        '401':
+          description: Unauthorized
+
+  /v1/moderations:
+    post:
+      summary: Create moderation
+      tags: [Moderations]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationRequest'
+      responses:
+        '200':
+          description: Moderation result
+        '401':
+          description: Unauthorized
+
+  /v1/responses:
+    post:
+      summary: Create response
+      description: OpenAI Responses API endpoint
+      tags: [Responses]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponsesRequest'
+      responses:
+        '200':
+          description: Response object
+        '401':
+          description: Unauthorized
+
+  /v1/responses/{response_id}:
+    get:
+      summary: Get response
+      tags: [Responses]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: response_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Response object
+        '404':
+          description: Not found
+    delete:
+      summary: Delete response
+      tags: [Responses]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: response_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          description: Not found
+
+  /v1/models:
+    get:
+      summary: List models
+      description: Returns all configured model aliases
+      tags: [Models]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Model list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelList'
+        '401':
+          description: Unauthorized
+
+  /v1/models/{model_id}:
+    get:
+      summary: Get model
+      tags: [Models]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model details
+        '404':
+          description: Model not found
+
+  /api/config:
+    get:
+      summary: Get configuration
+      description: Returns sanitized runtime configuration (model list, routing, rate limits)
+      tags: [Config]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current configuration
+    put:
+      summary: Update configuration
+      description: Hot-update routing strategy, rate limits, and logging settings
+      tags: [Config]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                routing:
+                  type: object
+                  properties:
+                    strategy:
+                      type: string
+                      enum: [round-robin, priority, random]
+                    retries:
+                      type: integer
+                    retry_delay_ms:
+                      type: integer
+                    fallback_enabled:
+                      type: boolean
+                rate_limiting:
+                  type: object
+                  properties:
+                    default_rpm:
+                      type: integer
+                    default_tpm:
+                      type: integer
+                logging:
+                  type: object
+                  properties:
+                    level:
+                      type: string
+                      enum: [debug, info, warn, error]
+      responses:
+        '200':
+          description: Updated
+        '401':
+          description: Unauthorized
+
+  /v1/management/keys:
+    get:
+      summary: List API keys
+      description: Returns all API keys (admins) or own keys (members/viewers)
+      tags: [API Keys]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Key list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+    post:
+      summary: Create API key
+      description: Generates a new API key with optional team, model, and budget scoping
+      tags: [API Keys]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAPIKeyRequest'
+      responses:
+        '201':
+          description: Created key (raw key shown only once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    description: Raw API key — save it, shown only once
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Insufficient role
+
+  /v1/management/keys/{id}:
+    put:
+      summary: Update API key
+      tags: [API Keys]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                is_active:
+                  type: boolean
+                models:
+                  type: array
+                  items:
+                    type: string
+                rpm_limit:
+                  type: integer
+                tpm_limit:
+                  type: integer
+                max_budget:
+                  type: number
+      responses:
+        '200':
+          description: Updated
+        '404':
+          description: Key not found
+    delete:
+      summary: Delete API key
+      tags: [API Keys]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Key not found
+
+  /v1/management/teams:
+    get:
+      summary: List teams
+      tags: [Teams]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Team list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+    post:
+      summary: Create team
+      tags: [Teams]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                org_id:
+                  type: string
+                  format: uuid
+                models:
+                  type: array
+                  items:
+                    type: string
+                rpm_limit:
+                  type: integer
+                tpm_limit:
+                  type: integer
+                max_budget:
+                  type: number
+      responses:
+        '201':
+          description: Created
+        '403':
+          description: Insufficient role
+
+  /v1/management/teams/{id}:
+    delete:
+      summary: Delete team
+      description: Deletes team and cascade-deactivates its API keys
+      tags: [Teams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  /v1/management/organizations:
+    get:
+      summary: List organizations
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Organization list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+    post:
+      summary: Create organization
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                max_budget:
+                  type: number
+      responses:
+        '201':
+          description: Created
+        '403':
+          description: Admin access required
+
+  /v1/management/organizations/{id}:
+    put:
+      summary: Update organization
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                max_budget:
+                  type: number
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+    delete:
+      summary: Delete organization
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  /v1/management/users:
+    get:
+      summary: List users
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+    post:
+      summary: Create user
+      description: Admin-only endpoint to create a user account
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [super_admin, org_admin, team_admin, member, viewer]
+                  default: member
+                team_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Created
+        '403':
+          description: Admin access required
+
+  /v1/management/users/login:
+    post:
+      summary: Login
+      description: Authenticate with email/password and receive a 24h session token
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Session token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+        '403':
+          description: Account deactivated
+
+  /v1/management/users/register:
+    post:
+      summary: Register
+      description: |
+        Public self-registration endpoint. Creates a new user account with a personal
+        organization and default team. The user becomes the org_admin of their workspace.
+        Rate limited to 5 registrations per hour per IP.
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+                name:
+                  type: string
+                  description: Workspace name (defaults to email prefix)
+      responses:
+        '201':
+          description: Account created with session token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expires_at:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  organization:
+                    $ref: '#/components/schemas/Organization'
+                  team:
+                    $ref: '#/components/schemas/Team'
+        '409':
+          description: Email already registered
+        '429':
+          description: Rate limited
+
+  /v1/management/users/{id}:
+    get:
+      summary: Get user
+      description: Admins can view any user; members can view themselves
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details
+        '403':
+          description: Access denied
+        '404':
+          description: User not found
+    put:
+      summary: Update user
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                role:
+                  type: string
+                is_active:
+                  type: boolean
+                team_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Access denied
+    delete:
+      summary: Delete user
+      description: Deactivates user and cascade-deactivates their API keys
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  /v1/management/credentials:
+    get:
+      summary: List credentials
+      description: Returns provider credentials with masked API keys
+      tags: [Credentials]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: org_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Credential list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+    post:
+      summary: Create credential
+      description: Store an encrypted provider API key in the vault
+      tags: [Credentials]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, provider, api_key]
+              properties:
+                name:
+                  type: string
+                provider:
+                  type: string
+                  enum: [openai, anthropic, gemini]
+                api_key:
+                  type: string
+                api_base:
+                  type: string
+                org_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Created
+        '403':
+          description: Admin access required
+
+  /v1/management/credentials/{id}:
+    put:
+      summary: Update credential
+      tags: [Credentials]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                provider:
+                  type: string
+                api_key:
+                  type: string
+                api_base:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+    delete:
+      summary: Delete credential
+      tags: [Credentials]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  /v1/management/credentials/{id}/test:
+    post:
+      summary: Test credential
+      description: Makes a lightweight API call to verify the stored key works
+      tags: [Credentials]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, error]
+                  message:
+                    type: string
+
+  /v1/management/deployments:
+    get:
+      summary: List deployments
+      tags: [Deployments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: org_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deployment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+    post:
+      summary: Create deployment
+      description: Add a new model deployment to the routing table
+      tags: [Deployments]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model_alias, provider, provider_model]
+              properties:
+                model_alias:
+                  type: string
+                provider:
+                  type: string
+                provider_model:
+                  type: string
+                api_key_env:
+                  type: string
+                credential_id:
+                  type: string
+                  format: uuid
+                org_id:
+                  type: string
+                  format: uuid
+                api_base:
+                  type: string
+                priority:
+                  type: integer
+      responses:
+        '201':
+          description: Created
+        '403':
+          description: Admin access required
+
+  /v1/management/deployments/{id}:
+    put:
+      summary: Update deployment
+      tags: [Deployments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model_alias:
+                  type: string
+                provider:
+                  type: string
+                provider_model:
+                  type: string
+                is_active:
+                  type: boolean
+                priority:
+                  type: integer
+      responses:
+        '200':
+          description: Updated
+        '404':
+          description: Deployment not found
+    delete:
+      summary: Delete deployment
+      tags: [Deployments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+
+  /v1/management/usage:
+    get:
+      summary: Get usage logs
+      tags: [Usage]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Spend logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+
+  /v1/management/usage/daily:
+    get:
+      summary: Get daily usage
+      tags: [Usage]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: Daily aggregated usage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+
+  /v1/management/pricing:
+    get:
+      summary: List pricing
+      description: Returns built-in and custom per-model pricing
+      tags: [Pricing]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Pricing list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+
+  /v1/management/pricing/{provider}/{model}:
+    get:
+      summary: Get model pricing
+      tags: [Pricing]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: model
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pricing details
+        '404':
+          description: Not found
+    put:
+      summary: Set custom pricing
+      tags: [Pricing]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: model
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input_cost_per_token:
+                  type: number
+                output_cost_per_token:
+                  type: number
+      responses:
+        '200':
+          description: Pricing set
+        '403':
+          description: Admin access required
+    delete:
+      summary: Delete custom pricing
+      tags: [Pricing]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: model
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+  /v1/management/callbacks:
+    get:
+      summary: List callbacks
+      tags: [Callbacks]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Callback configurations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+
+  /v1/management/callbacks/test:
+    post:
+      summary: Test callbacks
+      description: Sends a test event to all configured callback endpoints
+      tags: [Callbacks]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Test results per callback
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: object
+
+  /v1/management/providers/discover:
+    post:
+      summary: Discover models
+      description: Uses a stored credential to list available models from the provider
+      tags: [Discovery]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential_id]
+              properties:
+                credential_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Discovered models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataWrapper'
+        '502':
+          description: Provider discovery failed
+
+  /v1/management/routes/sync:
+    post:
+      summary: Sync routes
+      description: Auto-create deployments from a credential for selected models
+      tags: [Discovery]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential_id, models]
+              properties:
+                credential_id:
+                  type: string
+                  format: uuid
+                org_id:
+                  type: string
+                  format: uuid
+                models:
+                  type: array
+                  items:
+                    type: string
+                skip_existing:
+                  type: boolean
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: integer
+                  skipped:
+                    type: integer
+                  routes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Deployment'

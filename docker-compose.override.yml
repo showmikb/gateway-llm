@@ -1,0 +1,29 @@
+services:
+  backend:
+    volumes:
+      - ./config.test.yaml:/etc/gateway-llm/config.yaml
+    ports: !override
+      - "127.0.0.1:18080:8080"
+
+  ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ui
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:18080
+    ports: !override
+      - "127.0.0.1:13000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:18080
+
+  # Keep Postgres and Redis only on the internal docker network to avoid
+  # clashing with host-local installations on 5432/6379.
+  db:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  caddy:
+    profiles:
+      - disabled

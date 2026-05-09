@@ -1,0 +1,14 @@
+-- +migrate Up
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- +migrate Down
+
+DROP INDEX IF EXISTS idx_users_email;
+ALTER TABLE users DROP COLUMN IF EXISTS is_active;
+ALTER TABLE users DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE users DROP COLUMN IF EXISTS password_hash;

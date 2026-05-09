@@ -1,0 +1,60 @@
+# Perf gate: every PR against main runs the microbenchmarks. The gate
+# lives in bench/thresholds.yml; bumping a threshold requires an explicit
+# PR titled `perf: relax <benchmark> threshold — reason`.
+#
+# Comparative end-to-end benchmarks (gateway-llm vs LiteLLM/Bifrost/Portkey)
+# run nightly in bench.yml, not on every PR, because they require k6 +
+# docker and take ~6 minutes.
+name: perf
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'bench/**'
+      - '.github/workflows/perf.yml'
+  push:
+    branches: [main]
+
+jobs:
+  microbench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run benchmarks (PR branch)
+        run: |
+          go test -run '^$' -bench=. -benchmem -count=5 -timeout 10m \
+            ./internal/router/... ./internal/ir/... ./internal/replay/... \
+            | tee ../bench/results/new.txt
+
+      - name: Compare against main baseline
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin main:main
+          git checkout main
+          cd backend
+          go test -run '^$' -bench=. -benchmem -count=5 -timeout 10m \
+            ./internal/router/... ./internal/ir/... ./internal/replay/... \
+            | tee ../bench/results/main.txt
+          git checkout -
+          go install golang.org/x/perf/cmd/benchstat@latest
+          cd ../bench
+          benchstat results/main.txt results/new.txt | tee comparison.txt
+          node scripts/gate.mjs thresholds.yml comparison.txt
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: bench/results

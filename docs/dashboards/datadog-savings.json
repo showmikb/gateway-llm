@@ -1,0 +1,99 @@
+{
+  "title": "Gateway-LLM — Smart Routing Moat",
+  "description": "Drop-in dashboard for the smart-routing moat custom metrics. Requires the Datadog StatsD callback (statsd_addr) enabled in gateway-llm or the OTLP intake configured against /metrics.",
+  "layout_type": "ordered",
+  "is_read_only": false,
+  "template_variables": [
+    { "name": "alias", "prefix": "alias", "default": "*" },
+    { "name": "org_id", "prefix": "org_id", "default": "*" }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Total $ saved (window)",
+        "precision": 2,
+        "requests": [
+          { "q": "sum:gatewayllm.moat.savings_usd{$alias,$org_id}.as_count()", "aggregator": "sum" }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Requests routed (overridden)",
+        "requests": [
+          { "q": "sum:gatewayllm.moat.routing_decisions{decision:overridden}.as_count()", "aggregator": "sum" }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Quality pass %",
+        "precision": 1,
+        "requests": [
+          { "q": "(sum:gatewayllm.moat.judge_passes{result:pass}.as_count() / sum:gatewayllm.moat.judge_passes{*}.as_count()) * 100", "aggregator": "avg" }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Retry rate %",
+        "precision": 1,
+        "requests": [
+          { "q": "(sum:gatewayllm.moat.routing_decisions{decision:retried}.as_count() / sum:gatewayllm.moat.requests{*}.as_count()) * 100", "aggregator": "avg" }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "$ saved over time (by alias)",
+        "show_legend": true,
+        "requests": [
+          { "q": "sum:gatewayllm.moat.savings_usd{$alias,$org_id} by {alias}.as_rate()", "display_type": "line" }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Baseline vs Actual cost",
+        "show_legend": true,
+        "requests": [
+          { "q": "sum:gatewayllm.moat.baseline_cost_usd{$alias,$org_id}.as_rate()", "display_type": "line" },
+          { "q": "sum:gatewayllm.moat.cost_usd{$alias,$org_id}.as_rate()", "display_type": "line" }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "toplist",
+        "title": "Top aliases by savings",
+        "requests": [
+          { "q": "top(sum:gatewayllm.moat.savings_usd{*} by {alias}.as_count(), 10, 'sum', 'desc')" }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Latency P95 by model",
+        "requests": [
+          { "q": "p95:gatewayllm.request_duration_ms{*} by {model}", "display_type": "line" }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "heatmap",
+        "title": "Quality score distribution",
+        "requests": [
+          { "q": "avg:gatewayllm.moat.quality_score{*} by {alias}" }
+        ]
+      }
+    }
+  ]
+}

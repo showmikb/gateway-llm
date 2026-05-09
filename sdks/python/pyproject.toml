@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gateway-llm"
+version = "0.1.0"
+description = "Official Python client for Gateway-LLM, the LLM control plane."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Gateway-LLM", email = "hello@gateway-llm.dev" }]
+keywords = ["llm", "openai", "gateway", "smart-routing", "observability"]
+dependencies = [
+    "openai>=1.40.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.5.0",
+]
+
+[project.urls]
+Homepage = "https://gateway-llm.dev"
+Source   = "https://github.com/gateway-llm/gateway-llm"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gateway_llm"]

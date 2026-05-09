@@ -1,0 +1,6 @@
+ui/node_modules
+ui/.next
+backend/tmp
+.env
+*.plan.md
+.git

@@ -1,0 +1,77 @@
+# ──────────────────────────────────────────────
+# Secrets / local config
+# ──────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+!**/testdata/**/*.pem
+!**/testdata/**/*.key
+
+# ──────────────────────────────────────────────
+# OS / editor
+# ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ──────────────────────────────────────────────
+# Go (backend)
+# ──────────────────────────────────────────────
+backend/bin/
+backend/dist/
+backend/*.test
+backend/coverage.out
+backend/coverage.html
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# ──────────────────────────────────────────────
+# Node / Next.js (ui)
+# ──────────────────────────────────────────────
+node_modules/
+ui/.next/
+ui/out/
+ui/build/
+ui/dist/
+ui/.turbo/
+ui/tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ──────────────────────────────────────────────
+# Python / SDK / tests
+# ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Playwright / UI tests
+tests/ui/test-results/
+tests/ui/playwright-report/
+tests/ui/.playwright/
+
+# ──────────────────────────────────────────────
+# Build / runtime artefacts
+# ──────────────────────────────────────────────
+*.log
+logs/
+tmp/
+.tmp/
+.cache/

@@ -1,0 +1,86 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    # Bound to localhost only; external TLS traffic reaches the backend
+    # exclusively via the Caddy reverse proxy on 443.
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://gatewayllm:gatewayllm@db:5432/gatewayllm?sslmode=disable}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      GATEWAY_LLM_MASTER_KEY: ${GATEWAY_LLM_MASTER_KEY:?Set GATEWAY_LLM_MASTER_KEY in .env or environment}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./config.example.yaml:/etc/gateway-llm/config.yaml
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ui
+      args:
+        # Baked into the Next.js bundle at build time. Override via .env
+        # (e.g. https://api.gateway-llm.com in production behind Caddy).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    # Bound to localhost only; browsers reach the UI via Caddy on 443.
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # caddy_data is the critical volume: it holds the issued Let's Encrypt
+      # cert + the ACME account key, so container restarts and host reboots
+      # don't re-hit issuance rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - ui
+      - backend
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: gatewayllm
+      POSTGRES_PASSWORD: gatewayllm
+      POSTGRES_DB: gatewayllm
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gatewayllm"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

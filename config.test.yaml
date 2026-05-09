@@ -1,0 +1,90 @@
+server:
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 120s
+  graceful_shutdown_timeout: 30s
+
+database:
+  url: ${DATABASE_URL}
+  max_connections: 25
+
+redis:
+  url: ${REDIS_URL}
+
+auth:
+  master_key: ${GATEWAY_LLM_MASTER_KEY}
+
+model_list:
+  - model_alias: "gpt-4o-mini"
+    deployments:
+      - provider: openai
+        model: gpt-4o-mini
+        api_key_env: OPENAI_API_KEY
+
+  - model_alias: "gpt-4o"
+    deployments:
+      - provider: openai
+        model: gpt-4o
+        api_key_env: OPENAI_API_KEY
+
+  # Multi-deployment OpenAI alias for round-robin / circuit-breaker tests.
+  - model_alias: "smart"
+    deployments:
+      - provider: openai
+        model: gpt-4o-mini
+        api_key_env: OPENAI_API_KEY
+      - provider: openai
+        model: gpt-4o
+        api_key_env: OPENAI_API_KEY
+
+  - model_alias: "text-embedding-3-small"
+    deployments:
+      - provider: openai
+        model: text-embedding-3-small
+        api_key_env: OPENAI_API_KEY
+
+routing:
+  strategy: round-robin
+  retries: 2
+  retry_delay: 500ms
+  fallback_enabled: true
+
+rate_limiting:
+  default_rpm: 60
+  default_tpm: 200000
+  window: 1m
+
+logging:
+  level: debug
+  format: json
+
+response_cache:
+  enabled: true
+  ttl: 10m
+
+guardrails:
+  enabled: true
+  redact_pii: true
+  block_prompt_injection: true
+  blocked_patterns:
+    - "(?i)gateway-llm-test-forbidden"
+
+smart_route:
+  enabled: true
+  tiers:
+    simple: gpt-4o-mini
+    medium: gpt-4o-mini
+    complex: gpt-4o
+  shadow_percent: 0
+  shadow_max_concurrent: 2
+
+semantic_cache:
+  enabled: true
+  similarity_min: 0.85
+  max_entries: 128
+  ttl: 15m
+  dim: 256
+
+plugins:
+  enabled: false
+  list: []

@@ -1,0 +1,16 @@
+{
+	email admin@gateway-llm.com
+}
+
+# Admin UI. The apex marketing site (gateway-llm.com / www.) is hosted
+# on Vercel and points its own DNS — this EC2 instance only serves the
+# dashboard and API for customers.
+app.gateway-llm.com {
+	encode zstd gzip
+	reverse_proxy ui:3000
+}
+
+api.gateway-llm.com {
+	encode zstd gzip
+	reverse_proxy backend:8080
+}

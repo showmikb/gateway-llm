@@ -1,0 +1,49 @@
+name: provider-sync
+on:
+  schedule:
+    # Nightly at 03:43 UTC; offset from bench.yml (04:17) so the runner
+    # is not contended.
+    - cron: '43 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run provider-sync
+        working-directory: ops/provider-sync
+        run: |
+          go run . \
+            -target ../../backend/internal/cost/model_prices.json \
+            -diff ./diff.md
+
+      - name: Short-circuit if no changes
+        id: changes
+        run: |
+          if git diff --quiet -- backend/internal/cost/model_prices.json; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create pull request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: automation/provider-sync
+          delete-branch: true
+          title: "chore(pricing): nightly provider sync"
+          commit-message: "chore(pricing): nightly provider sync"
+          body-path: ops/provider-sync/diff.md
+          labels: automated, pricing
+          add-paths: |
+            backend/internal/cost/model_prices.json

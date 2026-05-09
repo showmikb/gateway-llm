@@ -1,0 +1,55 @@
+# Nightly comparative benchmark: run the same k6 scenario against every
+# competitor proxy and publish results to the website's Evidence Room.
+#
+# This workflow is source-of-truth for /evidence/benchmarks on the site.
+# The artifact it uploads (bench/results/all.json) is consumed by the
+# website build.
+name: bench
+
+on:
+  schedule:
+    - cron: '17 4 * * *' # daily 04:17 UTC
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - uses: grafana/setup-k6-action@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build gateway-llm
+        run: cd backend && go build -o /tmp/gateway-llm ./cmd/gateway-llm
+
+      - name: Pull competitor images
+        run: |
+          docker pull ghcr.io/berriai/litellm:main-latest || echo "litellm image unavailable"
+          docker pull maximhq/bifrost:latest || echo "bifrost image unavailable"
+          docker pull portkeyai/gateway:latest || echo "portkey image unavailable"
+
+      - name: Start everything and run compare
+        working-directory: gateway-llm/bench
+        run: |
+          chmod +x scripts/compare.sh
+          OUT_DIR=./results ./scripts/compare.sh
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: gateway-llm/bench/results/all.json
+
+      - name: Publish to website (pages repo)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p website-data
+          cp gateway-llm/bench/results/all.json website-data/bench-latest.json

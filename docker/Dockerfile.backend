@@ -1,0 +1,12 @@
+FROM golang:1.25-alpine AS builder
+WORKDIR /app
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /gateway-llm ./cmd/gateway-llm
+
+FROM gcr.io/distroless/static-debian12
+COPY --from=builder /gateway-llm /gateway-llm
+EXPOSE 8080
+ENTRYPOINT ["/gateway-llm"]
+CMD ["--config", "/etc/gateway-llm/config.yaml"]

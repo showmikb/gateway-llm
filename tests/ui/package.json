@@ -1,0 +1,20 @@
+{
+  "name": "gateway-llm-ui-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end UI tests for Gateway-LLM, driven by Playwright. New pages under ui/src/app/ are smoke-tested automatically.",
+  "scripts": {
+    "install-browsers": "playwright install --with-deps chromium",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:smoke": "playwright test 00-smoke",
+    "test:journey": "playwright test 04-user-journey",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}
